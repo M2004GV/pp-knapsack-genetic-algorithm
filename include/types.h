@@ -7,10 +7,10 @@ typedef struct {
 } Item;
 
 typedef struct {
-    int n_items;
+    int n_itens;
     int capacidade;
-    Item *items;
-} InstanciaMochila;
+    Item *itens;
+} Mochila;
 
 typedef struct {
     int *genes;

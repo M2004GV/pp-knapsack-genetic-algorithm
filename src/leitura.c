@@ -1,16 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-
-typedef struct {
-    int valor;
-    int peso;
-} Item;
-
-typedef struct {
-    int  n_itens;
-    int  capacidade;
-    Item *itens;
-} Mochila;
+#include "types.h"
 
 Mochila ler_arquivo(const char *caminho) {
     Mochila m;

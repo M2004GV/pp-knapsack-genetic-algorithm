@@ -16,12 +16,12 @@ Populacao criar_populacao(int tamanho, int n_itens) {
     }
 
     for(int i = 0; i < tamanho; i++){
-        populacao.individuos[i].genes = (char *)malloc(n_itens * sizeof(char));
+        populacao.individuos[i].genes = (int *)malloc(n_itens * sizeof(int));
         if(!populacao.individuos[i].genes) {
             fprintf(stderr, "Erro ao alocar memória para os genes do indivíduo %d.\n", i);
             exit(EXIT_FAILURE);
         }
-        memset(populacao.individuos[i].genes, 0, n_itens * sizeof(char)); 
+        memset(populacao.individuos[i].genes, 0, n_itens * sizeof(int)); 
         populacao.individuos[i].fitness = 0;
         populacao.individuos[i].peso_total = 0;
         populacao.individuos[i].valor_total = 0;
@@ -31,7 +31,7 @@ Populacao criar_populacao(int tamanho, int n_itens) {
 
 void destruir_populacao(Populacao *populacao) {
 
-    if(!populacao || !populacao->individuos) {        return;     }
+    if(!populacao || !populacao->individuos) return; 
 
     for(int i = 0; i < populacao->tamanho; i++) {
         free(populacao->individuos[i].genes);
@@ -43,7 +43,13 @@ void destruir_populacao(Populacao *populacao) {
     populacao->tamanho = 0;
 }
 
-void inicializar_populacao(Populacao *populacao){}
+void inicializar_populacao(Populacao *populacao){
+    for(int i = 0; i < populacao->tamanho; i++){
+        for(int j = 0; j < populacao->individuos[i].genes[j]; j++){
+            populacao->individuos[i].genes[j] = rand_int(0, 1);
+        }
+    }
+}
 
 void avaliar_populacao(Populacao *populacao, Mochila *instancia){
 
@@ -96,4 +102,13 @@ void crossover(Individuo *pai1, Individuo *pai2, Individuo *filho1, Individuo *f
             filho2->genes[i] = pai1->genes[i];
         }
     }
+}
+
+void mutacao(Individuo *individuo, double taxa_mutacao, int n_itens){
+    for(int i = 0; i < n_itens; i++){
+        if((double)rand() / RAND_MAX < taxa_mutacao){
+            individuo->genes[i] = 1 - individuo->genes[i];
+        }
+    }
+
 }

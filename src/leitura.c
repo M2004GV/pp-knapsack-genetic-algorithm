@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "types.h"
+#include "leitura.h"
 
 Mochila ler_arquivo(const char *caminho) {
     Mochila m;

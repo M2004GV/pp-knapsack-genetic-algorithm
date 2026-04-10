@@ -2,7 +2,7 @@
 #include "types.h"
 #include "algoritmo_genetico.h"
 
-#include "leitura.c"
+#include "leitura.h"
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {

@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "algoritmo_genetico.h"
+#include "../include/algoritmo_genetico.h"
+
+
 
 
 Populacao criar_populacao(int tamanho, int n_itens) {
@@ -161,8 +163,8 @@ void executar_algoritmo_genetico(Mochila *instancia, int tamanho_populacao, int 
             Individuo *filho2 = &nova_pop.individuos[i + 1];
 
             crossover(pai1, pai2, filho1, filho2, n);
-            mutar(filho1, n, taxa_mutacao);
-            mutar(filho2, n, taxa_mutacao);
+            mutacao(filho1, taxa_mutacao, n);
+            mutacao(filho2, taxa_mutacao, n);
         }
 
         avaliar_populacao(&nova_pop, instancia);

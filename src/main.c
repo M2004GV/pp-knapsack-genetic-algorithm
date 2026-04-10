@@ -6,25 +6,40 @@
 #include "../include/algoritmo_genetico.h"
 #include "../include/leitura.h"
 
+static void exibir_uso(const char *programa) {
+    fprintf(stderr,
+            "Uso: %s <arquivo_instancia> [tam_pop] [geracoes] [taxa_mutacao] [k_torneio] [semente]\n"
+            "Exemplo: %s data/large_scale/knapPI_3_100_1000_1 200 500 0.02 3 42\n",
+            programa,
+            programa);
+}
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
-        printf("Uso: %s <arquivo.knap>\n", argv[0]);
-        return 1;
+        exibir_uso(argv[0]);
+        return EXIT_FAILURE;
     }
 
-    srand(time(NULL));
+    int tam_populacao = (argc > 2) ? atoi(argv[2]) : 100;
+    int n_geracoes = (argc > 3) ? atoi(argv[3]) : 200;
+    double taxa_mutacao = (argc > 4) ? atof(argv[4]) : 0.02;
+    int k_torneio = (argc > 5) ? atoi(argv[5]) : 3;
+    unsigned int semente = (argc > 6) ? (unsigned int)strtoul(argv[6], NULL, 10) : (unsigned int)time(NULL);
+
+    if (tam_populacao <= 0 || n_geracoes <= 0 || taxa_mutacao < 0.0 || taxa_mutacao > 1.0 || k_torneio <= 0) {
+        fprintf(stderr, "Erro: parametros invalidos.\n");
+        exibir_uso(argv[0]);
+        return EXIT_FAILURE;
+    }
+
+    srand(semente);
 
     Mochila m = ler_arquivo(argv[1]);
     exibir_mochila(&m);
-
-    int    tam_populacao = 100;
-    int    n_geracoes    = 200;
-    int    k_torneio     = 3;
-    double taxa_mutacao  = 0.02;
+    printf("\nSemente utilizada : %u\n\n", semente);
 
     executar_algoritmo_genetico(&m, tam_populacao, n_geracoes, taxa_mutacao, k_torneio);
 
     liberar_mochila(&m);
-    return 0;
+    return EXIT_SUCCESS;
 }

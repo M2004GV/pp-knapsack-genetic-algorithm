@@ -1,239 +1,232 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../include/algoritmo_genetico.h"
+#include <time.h>
+#include <omp.h>
+
+#include "algoritmo_genetico.h"
+#include "rng.h"
+#include "types.h"
 
 Populacao criar_populacao(int tamanho, int n_itens) {
-    Populacao populacao;
-   
-    populacao.tamanho = tamanho;
-    populacao.individuos = (Individuo *)malloc(tamanho * sizeof(Individuo));
+    Populacao pop;
+    pop.tamanho = tamanho;
+    pop.individuos = malloc(tamanho * sizeof(Individuo));
 
-    if(!populacao.individuos) {
-        fprintf(stderr, "Erro ao alocar memória para a população.\n");
-        exit(EXIT_FAILURE);
+    for (int i = 0; i < tamanho; i++) {
+        pop.individuos[i].genes      = malloc(n_itens * sizeof(int));
+        pop.individuos[i].fitness    = 0;
+        pop.individuos[i].peso_total = 0;
+        pop.individuos[i].valor_total = 0;
     }
-
-    for(int i = 0; i < tamanho; i++){
-        populacao.individuos[i].genes = (int *)malloc(n_itens * sizeof(int));
-        if(!populacao.individuos[i].genes) {
-            fprintf(stderr, "Erro ao alocar memória para os genes do indivíduo %d.\n", i);
-            exit(EXIT_FAILURE);
-        }
-        memset(populacao.individuos[i].genes, 0, n_itens * sizeof(int)); 
-        populacao.individuos[i].fitness = 0;
-        populacao.individuos[i].peso_total = 0;
-        populacao.individuos[i].valor_total = 0;
-    }
-    return populacao;
+    return pop;
 }
 
-void destruir_populacao(Populacao *populacao) {
-
-    if(!populacao || !populacao->individuos) return; 
-
-    for(int i = 0; i < populacao->tamanho; i++) {
-        free(populacao->individuos[i].genes);
-        populacao->individuos[i].genes = NULL;
+void destruir_populacao(Populacao *pop) {
+    for (int i = 0; i < pop->tamanho; i++) {
+        free(pop->individuos[i].genes);
     }
-
-    free(populacao->individuos);
-    populacao->individuos = NULL;
-    populacao->tamanho = 0;
+    free(pop->individuos);
+    pop->individuos = NULL;
 }
 
 void copiar_individuo(const Individuo *origem, Individuo *destino, int n_itens) {
-    memcpy(destino->genes, origem->genes, (size_t)n_itens * sizeof(int));
-    destino->fitness = origem->fitness;
-    destino->peso_total = origem->peso_total;
+    memcpy(destino->genes, origem->genes, n_itens * sizeof(int));
+    destino->fitness     = origem->fitness;
+    destino->peso_total  = origem->peso_total;
     destino->valor_total = origem->valor_total;
 }
 
-void reparar_individuo(Individuo *individuo, Mochila *instancia) {
-    int peso_total = 0;
-    int valor_total = 0;
-
-    for (int i = 0; i < instancia->n_itens; i++) {
-        if (individuo->genes[i]) {
-            peso_total += instancia->itens[i].peso;
-            valor_total += instancia->itens[i].valor;
+void reparar_individuo(Individuo *ind, Mochila *inst) {
+    ind->peso_total  = 0;
+    ind->valor_total = 0;
+    for (int i = 0; i < inst->n_itens; i++) {
+        if (ind->genes[i]) {
+            ind->peso_total  += inst->itens[i].peso;
+            ind->valor_total += inst->itens[i].valor;
         }
     }
 
-    while (peso_total > instancia->capacidade) {
-        int pos = rand_int(0, instancia->n_itens - 1);
-        if (individuo->genes[pos]) {
-            individuo->genes[pos] = 0;
-            peso_total -= instancia->itens[pos].peso;
-            valor_total -= instancia->itens[pos].valor;
+    for (int i = inst->n_itens - 1;
+         i >= 0 && ind->peso_total > inst->capacidade; i--) {
+        if (ind->genes[i]) {
+            ind->genes[i]     = 0;
+            ind->peso_total  -= inst->itens[i].peso;
+            ind->valor_total -= inst->itens[i].valor;
         }
     }
 
-    individuo->peso_total = peso_total;
-    individuo->valor_total = valor_total;
-    individuo->fitness = valor_total;
+    ind->fitness = ind->valor_total;
 }
 
-void inicializar_populacao(Populacao *populacao, Mochila *instancia) {
-    for(int i = 0; i < populacao->tamanho; i++){
-        for(int j = 0; j < instancia->n_itens; j++){
-            populacao->individuos[i].genes[j] = rand() % 2;
+void inicializar_populacao(Populacao *pop, Mochila *inst) {
+    int n   = inst->n_itens;
+    int tam = pop->tamanho;
+
+    #pragma omp parallel
+    {
+        unsigned int seed = (unsigned int)(time(NULL))
+                          ^ (unsigned int)(omp_get_thread_num() * 2654435761u);
+
+        #pragma omp for schedule(static)
+        for (int i = 0; i < tam; i++) {
+            for (int j = 0; j < n; j++) {
+                pop->individuos[i].genes[j] = rand_int_ts(0, 1, &seed);
+            }
+            reparar_individuo(&pop->individuos[i], inst);
         }
-        reparar_individuo(&populacao->individuos[i], instancia);
     }
 }
 
-void avaliar_populacao(Populacao *populacao, Mochila *instancia){
-    for(int i = 0; i < populacao->tamanho; i++){
-        int peso_total = 0;
-        int valor_total = 0;
+void avaliar_populacao(Populacao *pop, Mochila *inst) {
+    int tam = pop->tamanho;
 
-        for(int j = 0; j < instancia->n_itens; j++){
-            if(populacao->individuos[i].genes[j]){
-                peso_total += instancia->itens[j].peso;
-                valor_total += instancia->itens[j].valor;
+    #pragma omp parallel for schedule(static)
+    for (int i = 0; i < tam; i++) {
+        reparar_individuo(&pop->individuos[i], inst);
+    }
+}
+
+int torneio(Populacao *pop, int k, unsigned int *seed) {
+    int melhor = rand_int_ts(0, pop->tamanho - 1, seed);
+    for (int i = 1; i < k; i++) {
+        int cand = rand_int_ts(0, pop->tamanho - 1, seed);
+        if (pop->individuos[cand].fitness > pop->individuos[melhor].fitness) {
+            melhor = cand;
+        }
+    }
+    return melhor;
+}
+
+void crossover(const Individuo *pai1, const Individuo *pai2,
+               Individuo *filho1, Individuo *filho2,
+               int n_itens, unsigned int *seed) {
+    int ponto = rand_int_ts(1, n_itens - 1, seed);
+
+    for (int i = 0; i < ponto; i++) {
+        filho1->genes[i] = pai1->genes[i];
+        filho2->genes[i] = pai2->genes[i];
+    }
+    for (int i = ponto; i < n_itens; i++) {
+        filho1->genes[i] = pai2->genes[i];
+        filho2->genes[i] = pai1->genes[i];
+    }
+}
+
+void mutacao(Individuo *ind, double taxa, int n_itens, unsigned int *seed) {
+    for (int i = 0; i < n_itens; i++) {
+        if (rand_double_ts(seed) < taxa) {
+            ind->genes[i] ^= 1;
+        }
+    }
+}
+
+Individuo melhor_individuo(Populacao *pop, int n_itens) {
+    int idx_melhor = 0;
+
+    #pragma omp parallel
+    {
+        int idx_local = 0;
+
+        #pragma omp for nowait
+        for (int i = 1; i < pop->tamanho; i++) {
+            if (pop->individuos[i].fitness > pop->individuos[idx_local].fitness) {
+                idx_local = i;
             }
         }
 
-        populacao->individuos[i].peso_total = peso_total;
-        populacao->individuos[i].valor_total = valor_total;
-        populacao->individuos[i].fitness = (peso_total > instancia->capacidade) ? 0 : valor_total;
-    }
-}
-
-int torneio(Populacao *populacao, int k){
-    int melhor_idx = rand_int(0, populacao->tamanho - 1);
-
-    for( int i = 1; i < k; i++){
-        int comp =  rand_int(0, populacao->tamanho - 1);
-        if(populacao->individuos[comp].fitness > populacao->individuos[melhor_idx].fitness) melhor_idx = comp;   
-    }
-    return melhor_idx;
-}
-void crossover(Individuo *pai1, Individuo *pai2, Individuo *filho1, Individuo *filho2, int n_itens){
-    if (n_itens < 2) {
-        copiar_individuo(pai1, filho1, n_itens);
-        copiar_individuo(pai2, filho2, n_itens);
-        return;
-    }
-
-    int ponto_corte = rand_int(1, n_itens - 1);
-    for(int i = 0; i < n_itens; i++){
-        if(i < ponto_corte){
-            filho1->genes[i] = pai1->genes[i];
-            filho2->genes[i] = pai2->genes[i];
-        }else{
-            filho1->genes[i] = pai2->genes[i];
-            filho2->genes[i] = pai1->genes[i];
-        }
-    }
-}
-
-void mutacao(Individuo *individuo, double taxa_mutacao, int n_itens){
-    for(int i = 0; i < n_itens; i++){
-        if((double)rand() / RAND_MAX < taxa_mutacao){
-            individuo->genes[i] = 1 - individuo->genes[i];
+        #pragma omp critical
+        {
+            if (pop->individuos[idx_local].fitness >
+                pop->individuos[idx_melhor].fitness) {
+                idx_melhor = idx_local;
+            }
         }
     }
 
+    Individuo melhor;
+    melhor.genes = malloc(n_itens * sizeof(int));
+    copiar_individuo(&pop->individuos[idx_melhor], &melhor, n_itens);
+    return melhor;
 }
 
-Individuo melhor_individuo(Populacao *populacao, int n_itens){
-    int melhor = 0;
-    for(int i = 1; i < populacao->tamanho; i++){
-        if(populacao->individuos[i].fitness > populacao->individuos[melhor].fitness){
-            melhor = i;
-        }
+void executar_algoritmo_genetico(Mochila *inst, int tam_pop,
+                                 int n_geracoes, double taxa_mut,
+                                 int k_torneio) {
+    int n = inst->n_itens;
+
+    Populacao pop      = criar_populacao(tam_pop, n);
+    Populacao nova_pop = criar_populacao(tam_pop, n);
+
+    inicializar_populacao(&pop, inst);
+    avaliar_populacao(&pop, inst);
+
+    Individuo melhor_global;
+    melhor_global.genes = malloc(n * sizeof(int));
+    {
+        Individuo tmp = melhor_individuo(&pop, n);
+        copiar_individuo(&tmp, &melhor_global, n);
+        free(tmp.genes);
     }
 
-    Individuo copia;
-    copia.fitness = populacao->individuos[melhor].fitness;
-    copia.peso_total = populacao->individuos[melhor].peso_total;
-    copia.valor_total = populacao->individuos[melhor].valor_total;
-    copia.genes = (int *)malloc(n_itens * sizeof(int));
-    memcpy(copia.genes, populacao->individuos[melhor].genes, n_itens * sizeof(int));
+    printf("Gen %4d | Melhor fitness: %d\n", 0, melhor_global.fitness);
 
-    return copia;
-}
+    for (int g = 1; g <= n_geracoes; g++) {
 
-void executar_algoritmo_genetico(Mochila *instancia, int tamanho_populacao, int n_geracoes, double taxa_mutacao, int k_torneio){
-    int n = instancia->n_itens;
+        #pragma omp parallel
+        {
+            unsigned int seed = (unsigned int)(g * 1000003u)
+                              ^ (unsigned int)(omp_get_thread_num() * 2654435761u);
 
-    if (tamanho_populacao % 2 != 0) {
-        tamanho_populacao++;
-    }
+            #pragma omp for schedule(static)
+            for (int i = 0; i < tam_pop / 2; i++) {
+                int p1 = torneio(&pop, k_torneio, &seed);
+                int p2 = torneio(&pop, k_torneio, &seed);
 
-    Populacao pop = criar_populacao(tamanho_populacao, n);
-    inicializar_populacao(&pop, instancia);
-    avaliar_populacao(&pop, instancia);
+                crossover(&pop.individuos[p1], &pop.individuos[p2],
+                          &nova_pop.individuos[2 * i],
+                          &nova_pop.individuos[2 * i + 1],
+                          n, &seed);
 
-    Individuo melhor_geral = melhor_individuo(&pop, n);
+                mutacao(&nova_pop.individuos[2 * i],     taxa_mut, n, &seed);
+                mutacao(&nova_pop.individuos[2 * i + 1], taxa_mut, n, &seed);
 
-    printf("=== Algoritmo Genetico ===\n");
-    printf("Populacao : %d | Geracoes : %d | Torneio k=%d | Mutacao : %.2f%%\n\n",
-           tamanho_populacao, n_geracoes, k_torneio, taxa_mutacao * 100.0);
+                reparar_individuo(&nova_pop.individuos[2 * i],     inst);
+                reparar_individuo(&nova_pop.individuos[2 * i + 1], inst);
+            }
 
-    for (int g = 0; g < n_geracoes; g++) {
-        Populacao nova_pop = criar_populacao(tamanho_populacao, n);
-
-        copiar_individuo(&melhor_geral, &nova_pop.individuos[0], n);
-        reparar_individuo(&nova_pop.individuos[0], instancia);
-
-        for (int i = 1; i < tamanho_populacao; i += 2) {
-            int idx1 = torneio(&pop, k_torneio);
-            int idx2 = torneio(&pop, k_torneio);
-
-            Individuo *pai1 = &pop.individuos[idx1];
-            Individuo *pai2 = &pop.individuos[idx2];
-            Individuo *filho1 = &nova_pop.individuos[i];
-            Individuo *filho2 = &nova_pop.individuos[(i + 1 < tamanho_populacao) ? i + 1 : i];
-
-            if (i + 1 < tamanho_populacao) {
-                crossover(pai1, pai2, filho1, filho2, n);
-                mutacao(filho1, taxa_mutacao, n);
-                mutacao(filho2, taxa_mutacao, n);
-                reparar_individuo(filho1, instancia);
-                reparar_individuo(filho2, instancia);
-            } else {
-                copiar_individuo(pai1, filho1, n);
-                mutacao(filho1, taxa_mutacao, n);
-                reparar_individuo(filho1, instancia);
+            #pragma omp single
+            if (tam_pop % 2 != 0) {
+                unsigned int s2 = seed;
+                int p = torneio(&pop, k_torneio, &s2);
+                copiar_individuo(&pop.individuos[p],
+                                 &nova_pop.individuos[tam_pop - 1], n);
             }
         }
 
-        avaliar_populacao(&nova_pop, instancia);
+        Populacao tmp = pop;
+        pop      = nova_pop;
+        nova_pop = tmp;
 
-        Individuo melhor_geracao = melhor_individuo(&nova_pop, n);
-        if (melhor_geracao.fitness > melhor_geral.fitness) {
-            free(melhor_geral.genes);
-            melhor_geral = melhor_geracao;
-        } else {
-            free(melhor_geracao.genes);
+        copiar_individuo(&melhor_global, &pop.individuos[0], n);
+
+        Individuo melhor_ger = melhor_individuo(&pop, n);
+        if (melhor_ger.fitness > melhor_global.fitness) {
+            copiar_individuo(&melhor_ger, &melhor_global, n);
         }
+        free(melhor_ger.genes);
 
-        destruir_populacao(&pop);
-        pop = nova_pop;
-
-        if (g == 0 || (g + 1) % 10 == 0) {
-            printf("Geracao %4d | Melhor fitness: %d | Peso: %d / %d\n",
-                   g + 1,
-                   melhor_geral.fitness,
-                   melhor_geral.peso_total,
-                   instancia->capacidade);
+        if (g % 50 == 0 || g == n_geracoes) {
+            printf("Gen %4d | Melhor fitness: %d\n", g, melhor_global.fitness);
         }
     }
 
     printf("\n=== Resultado Final ===\n");
-    printf("Melhor valor encontrado : %d\n", melhor_geral.fitness);
-    printf("Peso total utilizado    : %d / %d\n", melhor_geral.peso_total, instancia->capacidade);
-    printf("Itens selecionados      : ");
-    for (int i = 0; i < n; i++) {
-        if (melhor_geral.genes[i]) {
-            printf("%d ", i + 1);
-        }
-    }
-    printf("\n");
+    printf("Valor total : %d\n", melhor_global.valor_total);
+    printf("Peso total  : %d / %d\n", melhor_global.peso_total, inst->capacidade);
+    printf("Fitness     : %d\n", melhor_global.fitness);
 
-    free(melhor_geral.genes);
+    free(melhor_global.genes);
     destruir_populacao(&pop);
+    destruir_populacao(&nova_pop);
 }

@@ -6,7 +6,6 @@ TOUR=3
 SEED=42
 MIG=50
 
-# Se estiver como root (container), libera o mpirun
 export OMPI_ALLOW_RUN_AS_ROOT=1
 export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
 
